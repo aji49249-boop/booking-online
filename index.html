@@ -1,0 +1,1256 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ketersediaan Slot Booking Servis</title>
+<style>
+  :root{
+    --bg:#f6f7f9;
+    --card-bg:#ffffff;
+    --border:#e3e6ea;
+    --text:#1c2230;
+    --text-muted:#6b7280;
+    --accent:#2f6fed;
+    --green-bg:#e6f6ec;
+    --green-text:#12794b;
+    --green-border:#b9e7c9;
+    --amber-bg:#fff4e0;
+    --amber-text:#92600a;
+    --amber-border:#f3d999;
+    --red-bg:#fdecec;
+    --red-text:#a3231b;
+    --red-border:#f3c6c3;
+    --shadow: 0 1px 2px rgba(16,24,40,.04), 0 1px 3px rgba(16,24,40,.06);
+    /* dataviz categorical slots (fixed order — see dataviz skill palette) */
+    --series-1:#2a78d6;   /* blue */
+    --series-2:#eb6834;   /* orange */
+    --series-3:#1baf7a;   /* aqua */
+    --series-track:#cde2fb; /* light step of blue ramp, for meter track */
+    --ink-primary:#0b0b0b;
+    --ink-secondary:#52514e;
+    --ink-muted:#898781;
+    --gridline:#e1e0d9;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1100px;margin:0 auto;padding:28px 20px 60px;}
+  header.top{
+    display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between;
+    margin-bottom:22px;
+  }
+  h1{font-size:22px;margin:0 0 4px;letter-spacing:-0.01em;}
+  .sub{color:var(--text-muted);font-size:14px;margin:0;}
+  .meta{
+    display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text-muted);
+  }
+  button.refresh{
+    border:1px solid var(--border);background:var(--card-bg);color:var(--text);
+    padding:7px 14px;border-radius:8px;font-size:13px;cursor:pointer;
+    display:inline-flex;align-items:center;gap:6px;box-shadow:var(--shadow);
+  }
+  button.refresh:hover{background:#f0f2f5;}
+  button.refresh:disabled{opacity:.6;cursor:default;}
+  .spin{
+    width:13px;height:13px;border-radius:50%;
+    border:2px solid #c7cdd6;border-top-color:var(--accent);
+    animation:spin 0.8s linear infinite;display:inline-block;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .days{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:16px;
+  }
+  @media (max-width: 860px){ .days{grid-template-columns:1fr;} }
+
+  /* Layout row: puts a left-hand sidebar (Booking Hari Ini + Control Booking, stacked)
+     next to the 3-day grid, instead of stacked full-width above it. Only positioning —
+     the panels' own markup/styling below is untouched. */
+  .layout-row{display:flex;gap:20px;align-items:flex-start;}
+  .layout-row > .sidebar-col{flex:0 0 360px;display:flex;flex-direction:column;gap:20px;min-width:0;}
+  .sidebar-col > .today-panel{margin-bottom:0;}
+  .layout-row > .days{flex:1;min-width:0;}
+  @media (max-width: 1000px){
+    .layout-row{flex-direction:column;}
+    .layout-row > .sidebar-col{flex:1 1 auto;width:100%;margin-bottom:20px;}
+    .layout-row > .days{width:100%;}
+  }
+
+  .today-panel{
+    /* Dark variant of the shared tokens, scoped to this panel only — every rule below
+       (meter, donut, legend, text) already reads these same var() names, so redefining
+       them here is enough to re-theme the whole panel without touching any other rule. */
+    --card-bg:#1b2436;
+    --border:#2c3752;
+    --text:#ffffff;
+    --text-muted:#b7c2d9;
+    --ink-primary:#ffffff;
+    --ink-secondary:#b7c2d9;
+    --ink-muted:#8b94ab;
+    --gridline:#33405c;
+    --series-track:#2d3f5e;
+    background:var(--card-bg);border:1px solid var(--border);border-radius:14px;
+    color:var(--text);
+    padding:20px 22px;box-shadow:var(--shadow);margin-bottom:20px;
+  }
+  .today-head{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;}
+  .today-title{font-size:15px;font-weight:700;}
+  .today-date{font-size:13px;color:var(--ink-secondary);}
+  .today-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
+  @media (max-width: 760px){ .today-grid{grid-template-columns:1fr;} }
+
+  /* ---- Control Booking: same dark shell as "Booking Hari Ini" (reuses .today-panel),
+     just its own content below — a quick VIN/plat-nopol lookup, not a stats display. ---- */
+  .control-sub{font-size:12.5px;color:var(--ink-secondary);margin:-4px 0 12px;line-height:1.4;}
+  .control-search-row{display:flex;gap:8px;margin-bottom:4px;}
+  .control-search-row input{
+    flex:1;min-width:0;border:1px solid var(--border);border-radius:8px;
+    padding:9px 11px;font-size:14px;font-family:inherit;
+    background:rgba(255,255,255,.06);color:var(--text);
+  }
+  .control-search-row input::placeholder{color:var(--ink-muted);}
+  .control-search-row input:focus{outline:2px solid var(--accent);outline-offset:0;}
+  .control-search-row button{
+    border:none;border-radius:8px;padding:9px 16px;font-size:13.5px;font-weight:700;
+    background:var(--accent);color:#fff;cursor:pointer;flex-shrink:0;
+  }
+  .control-search-row button:hover{opacity:.92;}
+  .control-search-row button:disabled{opacity:.6;cursor:default;}
+  .control-loading{font-size:12.5px;color:var(--ink-secondary);padding:10px 2px;}
+  .control-card{border-radius:10px;padding:12px 14px;margin-top:10px;}
+  .control-card.cc-found{background:rgba(27,175,122,.14);border:1px solid rgba(27,175,122,.35);}
+  .control-card.cc-notfound{background:rgba(235,104,52,.14);border:1px solid rgba(235,104,52,.35);}
+  .cc-title{font-size:13.5px;font-weight:700;color:var(--text);margin-bottom:2px;}
+  .cc-sub{font-size:12.5px;color:var(--ink-secondary);line-height:1.4;}
+  .cc-row{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.08);}
+  .cc-row:last-child{border-bottom:none;}
+  .cc-label{color:var(--ink-secondary);flex-shrink:0;}
+  .cc-value{color:var(--text);font-weight:600;text-align:right;}
+
+  .meter-row{margin-bottom:6px;}
+  .meter-label{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;}
+  .meter-label .big{font-size:20px;font-weight:800;color:var(--ink-primary);font-variant-numeric:normal;}
+  .meter-label .sub{color:var(--ink-secondary);font-size:12.5px;}
+  .meter-track{height:14px;border-radius:8px;background:var(--series-track);overflow:hidden;}
+  .meter-fill{height:100%;background:var(--series-1);border-radius:8px 0 0 8px;transition:width .3s ease;}
+  .meter-caption{margin-top:8px;font-size:12.5px;color:var(--ink-secondary);}
+  .meter-caption strong{color:var(--ink-primary);}
+
+  .stack-title{font-size:13px;font-weight:600;color:var(--ink-secondary);margin-bottom:8px;}
+  .donut-row{display:flex;align-items:center;gap:20px;flex-wrap:wrap;}
+  .donut-wrap{position:relative;width:120px;height:120px;flex-shrink:0;}
+  .donut-svg{width:120px;height:120px;}
+  .donut-seg{transition:stroke-dasharray .3s ease;}
+  .donut-center{
+    position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  }
+  .donut-center .num{font-size:26px;font-weight:800;color:var(--ink-primary);line-height:1;}
+  .donut-center .lbl{font-size:10.5px;color:var(--ink-muted);font-weight:600;text-transform:uppercase;letter-spacing:.02em;margin-top:2px;}
+  .stack-legend{display:flex;flex-direction:column;gap:7px;}
+  .stack-legend-item{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink-secondary);}
+  .stack-swatch{width:10px;height:10px;border-radius:3px;flex-shrink:0;}
+  .stack-caption{margin-top:12px;font-size:12.5px;color:var(--ink-secondary);}
+  .day-card{
+    background:var(--card-bg);border:1px solid var(--border);border-radius:14px;
+    padding:18px;box-shadow:var(--shadow);
+  }
+  .day-head{margin-bottom:12px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px;}
+  .day-name{font-size:15px;font-weight:600;margin-top:8px;}
+  .day-date{font-size:13px;color:var(--text-muted);white-space:nowrap;}
+  /* Small SBE/GO/GR job-type tally shown right next to the day name/date — kept tiny
+     on purpose (per Dimas's request): just enough for the numbers to be legible, not a
+     full chart. Reuses the same three categorical dataviz colors as the "Rate
+     Kedatangan" donut, just as small dots rather than a legend/chart of its own. */
+  .job-tally{display:flex;gap:9px;justify-content:center;flex-wrap:wrap;margin-top:1px;}
+  .jt-item{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted);}
+  .jt-item b{color:var(--text);font-weight:700;}
+  .jt-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+  .booking-counter{
+    text-align:center;background:#eef4ff;border:1px solid #c7dafc;border-radius:12px;
+    padding:6px 16px;min-width:70px;flex-shrink:0;
+  }
+  .booking-counter .num{
+    font-size:30px;font-weight:800;line-height:1.1;color:#1a56c4;font-variant-numeric:tabular-nums;
+  }
+  .booking-counter .lbl{
+    font-size:10.5px;color:#3766b8;font-weight:700;margin-top:2px;letter-spacing:.02em;text-transform:uppercase;
+  }
+  .day-summary{
+    display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;justify-content:center;
+  }
+  .pill{
+    font-size:12px;padding:3px 9px;border-radius:999px;font-weight:600;
+    border:1px solid transparent;
+  }
+  .pill.green{background:var(--green-bg);color:var(--green-text);border-color:var(--green-border);}
+  .pill.amber{background:var(--amber-bg);color:var(--amber-text);border-color:var(--amber-border);}
+  .slots{margin-top:14px;display:flex;flex-direction:column;gap:6px;}
+  .slot{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:9px 12px;border-radius:10px;border:1px solid var(--border);
+    font-size:13.5px;
+  }
+  .slot.full{background:#fafafa;color:var(--text-muted);}
+  .slot.open{background:var(--green-bg);border-color:var(--green-border);}
+  .slot.low{background:var(--amber-bg);border-color:var(--amber-border);}
+  .slot .time{font-weight:600;font-variant-numeric:tabular-nums;}
+  .slot .status{font-size:12px;font-weight:600;}
+  .slot.open .status{color:var(--green-text);}
+  .slot.low .status{color:var(--amber-text);}
+  .slot.full .status{color:#9aa1ac;}
+  .slot.clickable{cursor:pointer;transition:transform .12s ease,box-shadow .12s ease;}
+  .slot.clickable:hover{transform:translateY(-1px);box-shadow:0 2px 6px rgba(16,24,40,.10);}
+  .slot.clickable:active{transform:translateY(0);}
+
+  /* ---- Booking form modal ---- */
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(16,20,30,.55);display:flex;align-items:center;
+    justify-content:center;padding:20px;z-index:100;
+  }
+  .modal-box{
+    background:var(--card-bg);border-radius:16px;max-width:440px;width:100%;
+    max-height:90vh;overflow-y:auto;padding:24px 24px 20px;box-shadow:0 12px 40px rgba(16,24,40,.25);
+  }
+  .modal-title{font-size:17px;font-weight:700;margin:0 0 2px;}
+  .modal-sub{font-size:13px;color:var(--text-muted);margin:0 0 18px;}
+  .modal-field{margin-bottom:13px;}
+  .modal-field label{display:block;font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:5px;}
+  .modal-field label .opt{color:var(--text-muted);font-weight:400;}
+  .modal-field input, .modal-field textarea{
+    width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 11px;
+    font-size:14px;font-family:inherit;color:var(--text);background:#fff;
+  }
+  .modal-field input:focus, .modal-field textarea:focus{outline:2px solid var(--accent);outline-offset:0;}
+  .modal-actions{display:flex;gap:10px;margin-top:18px;}
+  .modal-actions button{
+    flex:1;padding:11px 14px;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;border:1px solid transparent;
+  }
+  .btn-submit{background:var(--accent);color:#fff;}
+  .btn-submit:disabled{opacity:.6;cursor:default;}
+  .btn-exit{background:#fff;color:var(--text);border-color:var(--border);}
+  .modal-error{
+    background:var(--red-bg);border:1px solid var(--red-border);color:var(--red-text);
+    padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:14px;line-height:1.4;
+  }
+  .modal-success{text-align:center;padding:16px 4px 6px;}
+  .modal-success .check{
+    width:52px;height:52px;border-radius:50%;background:var(--green-bg);color:var(--green-text);
+    display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 14px;
+  }
+  .modal-success p{font-size:15px;font-weight:600;color:var(--text);margin:0 0 4px;}
+  .modal-success .sub{font-size:13px;color:var(--text-muted);font-weight:400;}
+  .empty-note{
+    font-size:13px;color:var(--text-muted);padding:14px 0;text-align:center;
+  }
+  .error-box{
+    background:var(--red-bg);border:1px solid var(--red-border);color:var(--red-text);
+    padding:14px 16px;border-radius:10px;font-size:13.5px;margin-bottom:18px;line-height:1.5;
+  }
+  .skeleton{
+    height:34px;border-radius:10px;background:linear-gradient(90deg,#eef0f3 25%,#e5e8ec 37%,#eef0f3 63%);
+    background-size:400% 100%;animation:shimmer 1.4s ease infinite;
+  }
+  @keyframes shimmer{0%{background-position:100% 0;}100%{background-position:0 0;}}
+  footer{margin-top:28px;font-size:12px;color:var(--text-muted);line-height:1.6;}
+  footer code{background:#eef0f3;padding:1px 5px;border-radius:5px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Ketersediaan Slot Booking Servis</h1>
+      <p class="sub">Jam kosong untuk 3 hari ke depan — data diambil langsung dari spreadsheet booking.</p>
+    </div>
+    <div class="meta">
+      <span id="lastUpdated">Memuat data…</span>
+      <button class="refresh" id="refreshBtn" onclick="loadData()">
+        <span id="refreshSpin"></span> Muat ulang
+      </button>
+    </div>
+  </header>
+
+  <div id="errorBox"></div>
+
+  <div class="layout-row">
+    <div class="sidebar-col">
+      <div class="today-panel" id="todayPanel">
+        <div class="today-head">
+          <div class="today-title">Booking Hari Ini</div>
+          <div class="today-date" id="todayDate"></div>
+        </div>
+        <div class="today-grid" id="todayGrid">
+          <div class="skeleton"></div>
+          <div class="skeleton"></div>
+        </div>
+      </div>
+
+      <div class="today-panel control-panel" id="controlPanel">
+        <div class="today-head">
+          <div class="today-title">Control Booking</div>
+        </div>
+        <div class="control-sub">Cek status booking kendaraan lewat No. Rangka (VIN) atau Plat Nopol — mencari ke semua tanggal yang terdaftar.</div>
+        <div class="control-search-row">
+          <input type="text" id="controlQuery" placeholder="Contoh: BK 1234 AB" onkeydown="if(event.key==='Enter'){ event.preventDefault(); runControlSearch(); }">
+          <button type="button" id="controlSearchBtn" onclick="runControlSearch()">Cek</button>
+        </div>
+        <div id="controlResult"></div>
+      </div>
+    </div>
+
+    <div class="days" id="daysContainer">
+      <div class="day-card"><div class="skeleton"></div></div>
+      <div class="day-card"><div class="skeleton"></div></div>
+      <div class="day-card"><div class="skeleton"></div></div>
+    </div>
+  </div>
+
+  <footer>
+    Sumber data: Google Sheets "Rekapan Booking Harian" (di-publish ke web). Kapasitas &amp; jam tiap slot dibaca langsung dari spreadsheet, bukan angka tetap — jika jadwal di spreadsheet berubah, halaman ini otomatis ikut berubah setelah dimuat ulang.
+    Halaman menampilkan <strong>besok + 2 hari berikutnya</strong>. Auto-refresh setiap 15 detik.
+  </footer>
+</div>
+
+<div class="modal-overlay" id="bookingOverlay" style="display:none;" onclick="if(event.target===this) closeBookingModal()">
+  <div class="modal-box" id="bookingModalBox"></div>
+</div>
+
+<script>
+// Web App URL from the Google Apps Script deployment that actually writes a new booking
+// back into a sheet when the form is submitted. There is only ONE of these regardless of
+// how many months/spreadsheet files exist — the script looks at the "sheetId" the page
+// sends along with each submission (see MONTHS_CONFIG below) and opens that specific
+// spreadsheet via SpreadsheetApp.openById(), instead of only ever writing to whichever
+// file it happens to be bound to. Leave blank until that's deployed; the booking form
+// will still open for preview, but submitting will show a clear "not configured yet"
+// message instead of failing silently.
+const BOOKING_SUBMIT_URL = "https://script.google.com/macros/s/AKfycbyi_AMwAl343itu_IHRLzPop5-NY4tUU5reFegAImX3hH6glJScph1jWFiqPrkB665L/exec";
+
+// Every calendar month lives in its OWN spreadsheet file (its own Sheet ID) — this
+// workbook is NOT one continuous sheet across months. Within a given month's file, each
+// calendar date also lives on its OWN tab (its own gid). Add a new entry here (keyed
+// "YYYY-MM") whenever a new month's workbook + tabs are ready; nothing else in the app
+// needs to change for the new month to start working, as long as its dates fall inside
+// the "today + next 3 days" window this page always shows.
+const MONTHS_CONFIG = {
+  "2026-08": { // Agustus 2026
+    sheetId: "1FNFbJVdaFjHvPS0xMVy8gmzH3hP9o1B3sSUzG8zgdUQ",
+    gidMap: {
+      19: "1243064223",
+      20: "1315686216",
+      21: "254738173",
+      22: "896842853",
+      23: "2027254113",
+      24: "2107406609",
+      25: "747586281",
+      26: "23828129",
+      27: "1985702950",
+      28: "1102732698",
+      29: "56976690",
+      30: "563544379",
+      31: "268521673"
+    }
+  },
+  "2026-09": { // September 2026
+    sheetId: "1I-JEzvQgsHfparfAfkpg2PkHoJpcUkQfyG5t4cjWqpI",
+    gidMap: {
+      1: "462006656",
+      2: "1804564298",
+      3: "76006365",
+      4: "1527226168",
+      5: "146347425",
+      6: "484275564",
+      7: "678224190",
+      8: "1307919788",
+      9: "730125042",
+      10: "345630665",
+      11: "1719532979",
+      12: "28824857",
+      13: "1597337458",
+      14: "907680668",
+      15: "1966273823",
+      16: "594744615",
+      17: "840678556",
+      18: "7791001",
+      19: "1243064223",
+      20: "1315686216",
+      21: "254738173",
+      22: "896842853",
+      23: "2027254113",
+      24: "2107406609",
+      25: "747586281",
+      26: "23828129",
+      27: "1985702950",
+      28: "1102732698",
+      29: "56976690",
+      30: "563544379"
+    }
+  },
+  "2026-10": { // Oktober 2026
+    sheetId: "1MG0qq6iuy1ces6eS082zmhoKiB0MfLD9kf21DUNoHB4",
+    gidMap: {
+      1: "462006656",
+      2: "1804564298",
+      3: "76006365",
+      4: "1527226168",
+      5: "146347425",
+      6: "484275564",
+      7: "678224190",
+      8: "1307919788",
+      9: "730125042",
+      10: "345630665",
+      11: "1719532979",
+      12: "28824857",
+      13: "1597337458",
+      14: "907680668",
+      15: "1966273823",
+      16: "594744615",
+      17: "840678556",
+      18: "7791001",
+      19: "1243064223",
+      20: "1315686216",
+      21: "254738173",
+      22: "896842853",
+      23: "2027254113",
+      24: "2107406609",
+      25: "747586281",
+      26: "23828129",
+      27: "1985702950",
+      28: "1102732698",
+      29: "56976690",
+      30: "563544379",
+      31: "268521673"
+    }
+  }
+};
+
+function monthKey(year, month0){ return year + '-' + String(month0 + 1).padStart(2, '0'); }
+function getMonthConfig(year, month0){ return MONTHS_CONFIG[monthKey(year, month0)]; }
+
+const MONTHS_ID = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+const DAYNAMES_ID = ["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"];
+
+// ---------- CSV parsing (handles quoted fields with embedded commas/newlines) ----------
+function parseCSV(text){
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++){
+    const c = text[i];
+    if (inQuotes){
+      if (c === '"'){
+        if (text[i+1] === '"'){ field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ','){ row.push(field); field=''; }
+      else if (c === '\r'){ /* ignore */ }
+      else if (c === '\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+      else field += c;
+    }
+  }
+  if (field.length || row.length){ row.push(field); rows.push(row); }
+  return rows;
+}
+
+function cell(row, i){
+  const v = row[i];
+  return (v === undefined || v === null) ? '' : String(v).trim();
+}
+
+function normTimeToMinutes(t){
+  if (!t) return null;
+  // Google's gviz export runs the "Booking Time" column through its own numeric
+  // formatter, which drops mathematically-insignificant trailing zeros — "8.00"
+  // (an exact hour) can come back as bare "8", and "7.30" can come back as "7.3"
+  // (a single decimal digit, since 0.30 == 0.3). Both must still be read as real
+  // times, or that whole time bucket's capacity silently disappears from the total.
+  let s = t.trim();
+  let m = s.match(/^(\d{1,2}):(\d{2})$/); // H:MM (colon variant)
+  if (m) return parseInt(m[1],10) * 60 + parseInt(m[2],10);
+  s = s.replace(',', '.');
+  if (/^\d{1,2}$/.test(s)) return parseInt(s,10) * 60; // bare hour -> HH:00
+  m = s.match(/^(\d{1,2})\.(\d{2})$/); // H.MM (fully specified)
+  if (m) return parseInt(m[1],10) * 60 + parseInt(m[2],10);
+  m = s.match(/^(\d{1,2})\.(\d)$/); // H.M (trailing zero dropped -> tens of minutes)
+  if (m) return parseInt(m[1],10) * 60 + parseInt(m[2],10) * 10;
+  return null;
+}
+
+function fmtMinutes(mins){
+  const h = Math.floor(mins/60), m = mins % 60;
+  return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+}
+
+function norm(v){ return (v === undefined || v === null) ? '' : String(v).trim(); }
+
+// ---------- Extract the single day's slot list from one tab's rows.
+// Column layout is FIXED across every normal day-tab we've verified (1, 19, 20, 21, 22):
+//   col1=No.  col2=Cap.  col3=Booking Time  col4=Job Type  col7=No. Polisi  col8=Model  col9=Cust. Name
+// The header LABEL text for "No."/"Cap." is sometimes blank on a given tab, so we normally
+// anchor on "Booking Time" (present and stable at col3 on most tabs) rather than searching
+// for "No."/"Cap." by name. Some tabs (e.g. tanggal 23) go further and leave the "Booking
+// Time" label itself blank too, even though the data columns are in the exact same
+// positions — for those we fall back to detecting the first actual DATA row directly: the
+// row where No.=1, Cap. is a small integer, and the time cell matches a real time value
+// (e.g. "8,15" / "7.30"). Only if neither anchor is found do we give up and return null. ----------
+const COL_NO = 1, COL_CAP = 2, COL_TIME = 3, COL_JOB = 4, COL_PLATE = 7, COL_MODEL = 8, COL_CUST = 9, COL_JOB_DETAIL = 12;
+
+function looksLikeTimeValue(v){
+  return /^\d{1,2}[.,]\d{2}$/.test(norm(v));
+}
+
+function looksLikeGroupStart(rr){
+  return /^\d+$/.test(cell(rr, COL_CAP)) && normTimeToMinutes(cell(rr, COL_TIME)) !== null;
+}
+
+// The VIN/No. Rangka column's position shifts between tabs (same issue already handled
+// on the write-back side in AppsScript_Code.gs), so it's located by scanning the tab's
+// own header area for "VIN" text each time, instead of assuming a fixed column.
+function findVinColumn(rows){
+  const headerScanRows = Math.min(15, rows.length);
+  for (let r = 0; r < headerScanRows; r++){
+    const row = rows[r];
+    for (let c = 0; c < row.length; c++){
+      if (String(row[c] || '').toUpperCase().indexOf('VIN') !== -1) return c;
+    }
+  }
+  return -1;
+}
+
+function collectSlotRows(rows, startIdx){
+  // Some day-tabs number every physical row sequentially in "No." even within a
+  // multi-capacity slot, while others leave "No." (and Cap./Time) blank on every row
+  // after the first row of that same group — relying purely on the merged/forward-filled
+  // Cap. value to say how many rows belong to the slot. So we track how many rows the
+  // current Cap. group still owns (groupRemaining) and keep going through blank
+  // continuation rows as long as that count hasn't run out.
+  //
+  // On top of that, a real tab can also have a "walk-in" row squeezed in beyond a slot's
+  // declared capacity — sometimes it still gets its own sequential "No." (handled by the
+  // isNumberedRow check below), and sometimes it's a totally blank-looking row (no No.,
+  // no Cap./Time at all) sitting right at the boundary between two groups, with nothing
+  // but a plate number in it. Neither groupRemaining nor "No." catches that second case.
+  // The one reliable tell: the sheet's real summary section (a "Total Booking :" row,
+  // then a "Persentase By ..." breakdown table) never goes back to looking like a real
+  // slot row afterward, while an isolated walk-in row is immediately followed by a
+  // genuine new group start. So before giving up, peek a few rows ahead — if a real
+  // group start shows up soon, this row is still inside the real block.
+  const slotRows = [];
+  const vinCol = findVinColumn(rows);
+  let lastCap = '', lastTime = '';
+  let groupRemaining = 0;
+  let j = startIdx;
+  while (j < rows.length){
+    const rr = rows[j];
+    const noVal = cell(rr, COL_NO);
+    const startsNewGroup = looksLikeGroupStart(rr);
+    const isNumberedRow = /^\d+$/.test(noVal);
+    let stillReal = groupRemaining > 0 || startsNewGroup || isNumberedRow;
+    if (!stillReal){
+      for (let k = j + 1; k < Math.min(j + 4, rows.length); k++){
+        if (looksLikeGroupStart(rows[k])){ stillReal = true; break; }
+      }
+      if (!stillReal) break; // genuinely past the real block
+    }
+    if (startsNewGroup){ lastCap = cell(rr, COL_CAP); lastTime = cell(rr, COL_TIME); groupRemaining = parseInt(lastCap, 10) || 0; }
+    const jobType = cell(rr, COL_JOB);
+    const jobDetail = cell(rr, COL_JOB_DETAIL);
+    const plate = cell(rr, COL_PLATE);
+    const model = cell(rr, COL_MODEL);
+    const cust = cell(rr, COL_CUST);
+    const vin = vinCol !== -1 ? cell(rr, vinCol) : '';
+    const booked = !!(jobType || plate || model || cust);
+    slotRows.push({ cap: parseInt(lastCap || '0', 10) || 0, time: lastTime, booked, jobType, jobDetail, plate, model, cust, vin });
+    if (groupRemaining > 0) groupRemaining--; // an orphaned walk-in row doesn't eat into a future group's count
+    j++;
+  }
+  return slotRows;
+}
+
+function extractSingleBlock(rows){
+  // Primary anchor: header row literally says "Booking Time".
+  for (let i = 0; i < rows.length; i++){
+    if (cell(rows[i], COL_TIME) !== 'Booking Time') continue;
+    const slotRows = collectSlotRows(rows, i + 1);
+    if (slotRows.length) return slotRows;
+  }
+  // Fallback anchor: no header label at all — detect the first real data row by shape
+  // (No.=1, Cap. numeric, time cell looks like a time) and start collecting from there.
+  for (let i = 0; i < rows.length; i++){
+    const rr = rows[i];
+    if (cell(rr, COL_NO) === '1' && /^\d+$/.test(cell(rr, COL_CAP)) && normTimeToMinutes(cell(rr, COL_TIME)) !== null){
+      const slotRows = collectSlotRows(rows, i);
+      if (slotRows.length) return slotRows;
+    }
+  }
+  return null;
+}
+
+// ---------- Job-type tally (SBE / GO / GR), shown as a small badge row next to the day
+// name/date on each day card. A booked row's Job Type falls into exactly one of these three buckets — SBE/SBI
+// counts as SBE, GO counts as GO, and everything else with an actual value (GR,
+// Diagnosa, Pemasangan Part, Rtj, or any other job type text) counts as GR, a
+// catch-all so SBE + GO + GR adds up to the total booking count rather than silently
+// dropping anything that isn't one of a fixed list of exact labels. A row that's
+// booked but whose Job Type cell hasn't been filled in yet is deliberately left OUT of
+// all three buckets for now (per Dimas) rather than guessed into GR — so SBE+GO+GR can
+// legitimately be a little less than the total booking count while staff are still
+// filling that column in. An unbooked/open row has no job to categorize either way.
+function classifyJobType(jobTypeRaw, jobDetailRaw){
+  const jt = String(jobTypeRaw || '').trim().toUpperCase();
+  if (jt === 'SBE' || jt === 'SBI') return 'SBE';
+  if (jt === 'GO') return 'GO';
+  if (jt) return 'GR'; // Job Type filled with something else -> catch-all GR
+
+  // Some tabs never fill the dedicated "Job Type" cell at all — staff instead write the
+  // job straight into the free-text "Job Detail" column (e.g. "SBE 60.000 KM"). When
+  // Job Type is blank, fall back to scanning Job Detail for the same keywords before
+  // giving up. \b keeps this from matching "GO" inside an unrelated word.
+  const jd = String(jobDetailRaw || '').trim().toUpperCase();
+  if (!jd) return null; // nothing filled in anywhere yet - don't count it for now
+  if (/\bSB[EI]\b/.test(jd)) return 'SBE';
+  if (/\bGO\b/.test(jd)) return 'GO';
+  return 'GR'; // some other job detail text -> catch-all GR
+}
+function tallyJobTypes(slotRows){
+  const t = { SBE: 0, GO: 0, GR: 0 };
+  for (const s of slotRows){
+    if (!s.booked) continue;
+    const cat = classifyJobType(s.jobType, s.jobDetail);
+    if (cat) t[cat]++;
+  }
+  return t;
+}
+
+function summarizeBlock(slotRows){
+  const byTime = new Map();
+  for (const s of slotRows){
+    const mins = normTimeToMinutes(s.time);
+    if (mins === null) continue;
+    if (!byTime.has(mins)) byTime.set(mins, { cap: s.cap, booked: 0 });
+    const g = byTime.get(mins);
+    g.cap = s.cap;
+    if (s.booked) g.booked++;
+  }
+  const arr = [];
+  for (const [mins, g] of byTime){
+    arr.push({ mins, cap: g.cap, booked: g.booked, available: Math.max(0, g.cap - g.booked) });
+  }
+  arr.sort((a,b) => a.mins - b.mins);
+  return arr;
+}
+
+// ---------- Pull the arrival-rate summary (Show / On Time / Early / Late / rates) that
+// the sheet already computes itself, from its "Persentase By Customer Coming" mini-table.
+// Anchored on the Type/Qty/Percent header at columns 12/13/14 (verified against a live tab) —
+// reading the sheet's own numbers keeps this consistent with what staff already see there. ----------
+const SUMMARY_COL_TYPE = 12, SUMMARY_COL_QTY = 13, SUMMARY_COL_PCT = 14;
+
+function extractSummaryStats(rows){
+  for (let i = 0; i < rows.length; i++){
+    const r = rows[i];
+    if (cell(r, SUMMARY_COL_TYPE) === 'Type' && cell(r, SUMMARY_COL_QTY) === 'Qty' && cell(r, SUMMARY_COL_PCT) === 'Percent'){
+      const wanted = ['Total Booking','Show','On Time','Early','Late','Show Rate','No Show','No Show Rate'];
+      const out = {};
+      for (let j = i + 1; j < Math.min(i + 12, rows.length); j++){
+        const label = cell(rows[j], SUMMARY_COL_TYPE);
+        if (!label) continue;
+        if (wanted.includes(label)){
+          out[label] = {
+            qty: parseInt(cell(rows[j], SUMMARY_COL_QTY) || '0', 10) || 0,
+            pct: cell(rows[j], SUMMARY_COL_PCT) // e.g. "46,43%" — kept as the sheet's own formatted string
+          };
+        }
+      }
+      if (Object.keys(out).length) return out;
+    }
+  }
+  return null;
+}
+
+// ---------- JSONP fallback via the Google Visualization API (bypasses fetch()/CORS
+// entirely by loading a <script> tag, which is the standard trick for reading a
+// public Google Sheet from client-side JS when a plain fetch() is blocked) ----------
+function loadRowsViaJSONP(sheetId, gid, timeoutMs){
+  return new Promise((resolve, reject) => {
+    const cbName = '__gvizCb_' + Math.floor(Math.random()*1e9);
+    let settled = false;
+    function cleanup(){
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      clearTimeout(timer);
+    }
+    window[cbName] = function(json){
+      if (settled) return;
+      settled = true;
+      cleanup();
+      try{
+        const table = json.table;
+        // Google's gviz JSON sometimes reports fewer declared columns (table.cols.length)
+        // than a given data row actually contains (its column-shape inference samples only
+        // a few rows) — trusting table.cols.length alone can silently truncate later columns
+        // (and, worse, make row-shape look inconsistent and cut the slot list short). Instead
+        // size every row to the WIDEST row actually seen, so no column is ever dropped.
+        const maxCols = Math.max(
+          table.cols ? table.cols.length : 0,
+          ...table.rows.map(r => (r && r.c) ? r.c.length : 0)
+        );
+        const rows = table.rows.map(r => {
+          const cArr = (r && r.c) ? r.c : [];
+          const out = [];
+          for (let i = 0; i < maxCols; i++){
+            const c = cArr[i];
+            if (!c) { out.push(''); continue; }
+            if (c.f !== undefined && c.f !== null) out.push(String(c.f));
+            else if (c.v !== undefined && c.v !== null) out.push(String(c.v));
+            else out.push('');
+          }
+          return out;
+        });
+        resolve(rows);
+      } catch(e){ reject(e); }
+    };
+    const script = document.createElement('script');
+    script.src = 'https://docs.google.com/spreadsheets/d/' + sheetId + '/gviz/tq?gid=' + gid +
+      '&tqx=out:json;responseHandler:' + cbName;
+    script.onerror = () => { if (!settled){ settled = true; cleanup(); reject(new Error('Gagal memuat script JSONP')); } };
+    const timer = setTimeout(() => { if (!settled){ settled = true; cleanup(); reject(new Error('Timeout JSONP')); } }, timeoutMs || 15000);
+    document.head.appendChild(script);
+  });
+}
+
+// ---------- Generic JSONP GET, used for the booking submit call. Google Apps Script Web
+// Apps have a well-known CORS limitation where a browser's fetch() often cannot read the
+// response of a cross-origin POST to a *.exec URL — a plain <script src> GET request (the
+// same trick loadRowsViaJSONP already uses to read the sheet) never triggers CORS at all,
+// so this is the reliable way to call the booking endpoint from the page. ----------
+function jsonpGet(url, params, timeoutMs){
+  return new Promise((resolve, reject) => {
+    const cbName = '__jsonpCb_' + Math.floor(Math.random()*1e9);
+    let settled = false;
+    function cleanup(){
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      clearTimeout(timer);
+    }
+    window[cbName] = function(result){
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(result);
+    };
+    const qs = new URLSearchParams(Object.assign({}, params, { callback: cbName })).toString();
+    const script = document.createElement('script');
+    script.src = url + (url.indexOf('?') !== -1 ? '&' : '?') + qs;
+    script.onerror = () => { if (!settled){ settled = true; cleanup(); reject(new Error('Gagal memuat script booking')); } };
+    const timer = setTimeout(() => { if (!settled){ settled = true; cleanup(); reject(new Error('Timeout — server booking tidak merespons')); } }, timeoutMs || 20000);
+    document.head.appendChild(script);
+  });
+}
+
+// ---------- Fetch one tab's rows by gid: try plain fetch() first (works when hosted on
+// https), fall back to JSONP (works even when fetch()/CORS is blocked, e.g. local file://) ----------
+async function fetchTabRows(sheetId, gid){
+  const csvUrl = 'https://docs.google.com/spreadsheets/d/' + sheetId + '/gviz/tq?tqx=out:csv&gid=' + gid;
+  try{
+    const res = await fetch(csvUrl, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    if (!text || text.length < 10) throw new Error('Respons kosong');
+    return parseCSV(text);
+  } catch(e){
+    return await loadRowsViaJSONP(sheetId, gid);
+  }
+}
+
+function jakartaToday(){
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone:'Asia/Jakarta', year:'numeric', month:'2-digit', day:'2-digit' });
+  const parts = fmt.formatToParts(new Date());
+  const y = +parts.find(p=>p.type==='year').value;
+  const m = +parts.find(p=>p.type==='month').value;
+  const d = +parts.find(p=>p.type==='day').value;
+  return new Date(Date.UTC(y, m-1, d));
+}
+
+function addDays(date, n){
+  const d = new Date(date.getTime());
+  d.setUTCDate(d.getUTCDate() + n);
+  return d;
+}
+
+function renderError(msg){
+  document.getElementById('errorBox').innerHTML =
+    '<div class="error-box"><strong>Tidak bisa memuat data.</strong><br>' + msg +
+    '<br><br>Pastikan spreadsheet-nya masih bisa diakses (link view access tetap aktif) dan tab tanggal terkait belum dihapus/dipindah.</div>';
+}
+
+function slotClass(s){
+  if (s.available <= 0) return 'full';
+  if (s.available <= 1) return 'low';
+  return 'open';
+}
+
+function renderDays(dayInfos){
+  const container = document.getElementById('daysContainer');
+  container.innerHTML = '';
+  for (const info of dayInfos){
+    const card = document.createElement('div');
+    card.className = 'day-card';
+
+    const openCount = info.slots ? info.slots.filter(s => s.available > 0).length : 0;
+    const totalAvail = info.slots ? info.slots.reduce((a,s)=>a+s.available,0) : 0;
+    const totalBooked = info.slots ? info.slots.reduce((a,s)=>a+s.booked,0) : 0;
+    const totalCap = info.slots ? info.slots.reduce((a,s)=>a+s.cap,0) : 0;
+
+    let bodyHtml = '';
+    if (info.error){
+      bodyHtml = '<div class="empty-note">' + info.error + '</div>';
+    } else if (!info.slots){
+      bodyHtml = '<div class="empty-note">Data untuk tanggal ini belum tersedia di spreadsheet.</div>';
+    } else if (info.slots.length === 0){
+      bodyHtml = '<div class="empty-note">Tidak ada jadwal slot untuk hari ini.</div>';
+    } else {
+      // Only the still-open slots are worth showing to a customer checking availability —
+      // fully-booked hours are automatically hidden rather than listed as "PENUH".
+      const openSlots = info.slots.filter(s => s.available > 0);
+      if (openSlots.length === 0){
+        bodyHtml = '<div class="empty-note">Semua slot jam sudah penuh hari ini.</div>';
+      } else {
+        bodyHtml = '<div class="slots">' + openSlots.map(s => {
+          const cls = slotClass(s);
+          // Attribute is single-quoted because JSON.stringify() below produces
+          // double-quoted JS string literals — using double quotes for the attribute
+          // itself would let that first embedded " prematurely close it.
+          const onclick = 'openBookingModal(' + info.dayOfMonth + ',' + s.mins + ',' +
+            JSON.stringify(info.dateLabel) + ',' + JSON.stringify(info.dayName) + ',' + JSON.stringify(info.sheetId) + ')';
+          return '<div class="slot ' + cls + ' clickable" onclick=\'' + onclick + '\'>' +
+            '<span class="time">' + fmtMinutes(s.mins) + '</span>' +
+            '<span class="status">' + s.available + ' kursi kosong <span style="color:#9aa1ac;font-weight:400;">(' + s.booked + '/' + s.cap + ')</span></span>' +
+            '</div>';
+        }).join('') + '</div>';
+      }
+    }
+
+    card.innerHTML =
+      '<div class="day-head">' +
+        (info.slots ? '<div class="booking-counter">' +
+          '<div class="num">' + totalBooked + '</div>' +
+          '<div class="lbl">Booking / ' + totalCap + '</div>' +
+        '</div>' : '') +
+        '<div class="day-name">' + info.dayName + '</div>' +
+        '<div class="day-date">' + info.dateLabel + '</div>' +
+        (info.jobTally ? '<div class="job-tally">' +
+          '<span class="jt-item"><span class="jt-dot" style="background:var(--series-1);"></span>SBE <b>' + info.jobTally.SBE + '</b></span>' +
+          '<span class="jt-item"><span class="jt-dot" style="background:var(--series-2);"></span>GO <b>' + info.jobTally.GO + '</b></span>' +
+          '<span class="jt-item"><span class="jt-dot" style="background:var(--series-3);"></span>GR <b>' + info.jobTally.GR + '</b></span>' +
+        '</div>' : '') +
+        (info.slots ? '<div class="day-summary">' +
+          '<span class="pill green">' + openCount + ' slot jam tersedia</span>' +
+          '<span class="pill amber">' + totalAvail + ' kursi kosong total</span>' +
+        '</div>' : '') +
+      '</div>' + bodyHtml;
+    container.appendChild(card);
+  }
+}
+
+// ---------- Booking form modal: click an open slot -> fill in vehicle/customer details ->
+// submit writes the booking straight into the matching row of that day's tab (via the
+// Apps Script Web App), then refreshes the grid so the slot's availability updates. ----------
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+let currentBooking = null; // { dayOfMonth, mins, dateLabel, dayName, sheetId }
+
+function openBookingModal(dayOfMonth, mins, dateLabel, dayName, sheetId){
+  currentBooking = { dayOfMonth, mins, dateLabel, dayName, sheetId };
+  renderBookingForm();
+  document.getElementById('bookingOverlay').style.display = 'flex';
+}
+
+function closeBookingModal(){
+  document.getElementById('bookingOverlay').style.display = 'none';
+  currentBooking = null;
+}
+
+function renderBookingForm(errorMsg, prefill){
+  const b = currentBooking;
+  const p = prefill || {};
+  const v = (s) => escapeHtml(s || '');
+  const box = document.getElementById('bookingModalBox');
+  box.innerHTML =
+    '<div class="modal-title">Booking Servis</div>' +
+    '<div class="modal-sub">' + escapeHtml(b.dayName) + ', ' + escapeHtml(b.dateLabel) + ' — jam ' + fmtMinutes(b.mins) + '</div>' +
+    (errorMsg ? '<div class="modal-error">' + escapeHtml(errorMsg) + '</div>' : '') +
+    '<form id="bookingForm" onsubmit="submitBooking(event)">' +
+      '<div class="modal-field"><label>Nomor Polisi</label><input type="text" id="f_plate" value="' + v(p.plate) + '" placeholder="Contoh: BK 1234 XY" required></div>' +
+      '<div class="modal-field"><label>Model Kendaraan</label><input type="text" id="f_model" value="' + v(p.model) + '" placeholder="Contoh: Avanza" required></div>' +
+      '<div class="modal-field"><label>Nama Customer</label><input type="text" id="f_cust" value="' + v(p.custName) + '" placeholder="Nama lengkap" required></div>' +
+      '<div class="modal-field"><label>No. Telepon</label><input type="tel" id="f_phone" value="' + v(p.phone) + '" placeholder="08xxxxxxxxxx" required></div>' +
+      '<div class="modal-field"><label>Job Detail <span class="opt">(opsional)</span></label><input type="text" id="f_job" value="' + v(p.jobDetail) + '" placeholder="Contoh: SBE 30.000 KM"></div>' +
+      '<div class="modal-field"><label>VIN / No. Rangka <span class="opt">(opsional)</span></label><input type="text" id="f_vin" value="' + v(p.vin) + '" placeholder="Nomor rangka kendaraan"></div>' +
+      '<div class="modal-actions">' +
+        '<button type="button" class="btn-exit" onclick="closeBookingModal()">Exit</button>' +
+        '<button type="submit" class="btn-submit" id="submitBtn">Submit</button>' +
+      '</div>' +
+    '</form>';
+}
+
+function renderBookingSuccess(){
+  const box = document.getElementById('bookingModalBox');
+  box.innerHTML =
+    '<div class="modal-success">' +
+      '<div class="check">✓</div>' +
+      '<p>Terima kasih, kendaraan Anda sudah terjadwal.</p>' +
+      '<div class="sub">' + escapeHtml(currentBooking.dayName) + ', ' + escapeHtml(currentBooking.dateLabel) + ' — jam ' + fmtMinutes(currentBooking.mins) + '</div>' +
+    '</div>' +
+    '<div class="modal-actions"><button type="button" class="btn-submit" onclick="closeBookingModal()" style="flex:1;">Tutup</button></div>';
+}
+
+async function submitBooking(ev){
+  ev.preventDefault();
+  const b = currentBooking;
+  const payload = {
+    day: String(b.dayOfMonth),
+    sheetId: b.sheetId || '',
+    mins: b.mins,
+    plate: document.getElementById('f_plate').value.trim(),
+    model: document.getElementById('f_model').value.trim(),
+    custName: document.getElementById('f_cust').value.trim(),
+    phone: document.getElementById('f_phone').value.trim(),
+    jobDetail: document.getElementById('f_job').value.trim(),
+    vin: document.getElementById('f_vin').value.trim()
+  };
+  if (!payload.plate || !payload.model || !payload.custName || !payload.phone){
+    renderBookingForm('Nomor polisi, model, nama, dan telepon wajib diisi.', payload);
+    return;
+  }
+  if (!BOOKING_SUBMIT_URL){
+    renderBookingForm('Fitur booking online belum aktif — Apps Script belum disambungkan. Hubungi admin.', payload);
+    return;
+  }
+  const submitBtn = document.getElementById('submitBtn');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Menyimpan…';
+  try{
+    // JSONP (script-tag) call, not fetch() — Apps Script Web Apps have a well-known CORS
+    // limitation where fetch() can't read the response of a cross-origin POST to a .exec
+    // URL, even with "Anyone" access. A <script src> GET never triggers CORS at all, so
+    // this is the reliable way to reach the booking endpoint (same technique the app
+    // already uses to read the sheet itself).
+    const result = await jsonpGet(BOOKING_SUBMIT_URL, payload, 20000);
+    if (result && result.success){
+      renderBookingSuccess();
+      loadData(); // refresh the grid so this slot's availability updates immediately
+    } else {
+      renderBookingForm((result && result.message) || 'Booking gagal disimpan, silakan coba lagi.', payload);
+    }
+  } catch(e){
+    renderBookingForm('Gagal menghubungi server booking. Cek koneksi internet dan coba lagi.', payload);
+  }
+}
+
+function renderToday(info){
+  document.getElementById('todayDate').textContent = info.dateLabel;
+  const grid = document.getElementById('todayGrid');
+
+  if (info.error){
+    grid.innerHTML = '<div class="empty-note" style="grid-column:1/-1;">' + info.error + '</div>';
+    return;
+  }
+
+  const totalCap = info.slots ? info.slots.reduce((a,s)=>a+s.cap,0) : 0;
+  const totalBooked = info.slots ? info.slots.reduce((a,s)=>a+s.booked,0) : 0;
+  const remaining = Math.max(0, totalCap - totalBooked);
+  const pctFilled = totalCap > 0 ? Math.min(100, Math.round((totalBooked/totalCap)*100)) : 0;
+
+  const meterHtml =
+    '<div>' +
+      '<div class="meter-row">' +
+        '<div class="meter-label"><span class="big">' + totalBooked + ' / ' + totalCap + '</span>' +
+          '<span class="sub">' + pctFilled + '% terisi</span></div>' +
+        '<div class="meter-track"><div class="meter-fill" style="width:' + pctFilled + '%;"></div></div>' +
+      '</div>' +
+      '<div class="meter-caption">Sisa <strong>' + remaining + ' slot</strong> lagi yang masih bisa diisi hari ini.</div>' +
+    '</div>';
+
+  let stackHtml = '<div class="empty-note">Data rate kedatangan belum tersedia.</div>';
+  const st = info.stats;
+  if (st){
+    const early = st['Early'] ? st['Early'].qty : 0;
+    const onTime = st['On Time'] ? st['On Time'].qty : 0;
+    const late = st['Late'] ? st['Late'].qty : 0;
+    const show = st['Show'] ? st['Show'].qty : (early+onTime+late);
+    const other = Math.max(0, show - early - onTime - late);
+    const segs = [
+      { label:'Early', qty: early, pct: st['Early'] ? st['Early'].pct : '', color:'var(--series-1)' },
+      { label:'On Time', qty: onTime, pct: st['On Time'] ? st['On Time'].pct : '', color:'var(--series-3)' },
+      { label:'Late', qty: late, pct: st['Late'] ? st['Late'].pct : '', color:'var(--series-2)' },
+      { label:'Lainnya', qty: other, pct: '', color:'var(--gridline)' }
+    ].filter(s => s.qty > 0);
+    const sum = segs.reduce((a,s)=>a+s.qty,0) || 1;
+
+    // Donut: stroked circle with per-segment dasharray/dashoffset, a small surface-color
+    // gap between segments (2px equivalent along the circumference), rotated to start at 12 o'clock.
+    const R = 50, CIRC = 2 * Math.PI * R, GAP = segs.length > 1 ? 3 : 0;
+    let cursor = 0;
+    const donutSegs = segs.map(s => {
+      const raw = (s.qty/sum) * CIRC;
+      const len = Math.max(0, raw - GAP);
+      const html = '<circle class="donut-seg" cx="60" cy="60" r="' + R + '" fill="none" style="stroke:' + s.color + ';" ' +
+        'stroke-width="16" stroke-dasharray="' + len + ' ' + (CIRC - len) + '" ' +
+        'stroke-dashoffset="' + (-cursor) + '" transform="rotate(-90 60 60)" />';
+      cursor += raw;
+      return html;
+    }).join('');
+
+    const donutHtml =
+      '<div class="donut-wrap">' +
+        '<svg class="donut-svg" viewBox="0 0 120 120">' +
+          '<circle cx="60" cy="60" r="' + R + '" fill="none" stroke="var(--gridline)" stroke-width="16" />' +
+          donutSegs +
+        '</svg>' +
+        '<div class="donut-center"><div class="num">' + show + '</div><div class="lbl">Show</div></div>' +
+      '</div>';
+
+    const legendHtml = segs.map(s =>
+      '<div class="stack-legend-item"><span class="stack-swatch" style="background:' + s.color + ';"></span>' +
+        s.label + ': <strong style="color:var(--ink-primary);">' + s.qty + '</strong>' +
+        (s.pct ? ' (' + s.pct + ')' : '') +
+      '</div>'
+    ).join('');
+
+    const showRate = st['Show Rate'] ? st['Show Rate'].pct : '';
+    const noShow = st['No Show'] ? st['No Show'].qty : null;
+
+    stackHtml =
+      '<div class="stack-title">Rate Kedatangan (dari ' + show + ' yang sudah datang)</div>' +
+      '<div class="donut-row">' + donutHtml + '<div class="stack-legend">' + legendHtml + '</div></div>' +
+      (showRate ? '<div class="stack-caption">Show Rate: <strong style="color:var(--ink-primary);">' + showRate + '</strong>' +
+        (noShow !== null ? ' • No Show: <strong style="color:var(--ink-primary);">' + noShow + '</strong>' : '') +
+      '</div>' : '');
+  }
+
+  grid.innerHTML = meterHtml + '<div>' + stackHtml + '</div>';
+}
+
+async function loadData(){
+  const btn = document.getElementById('refreshBtn');
+  const spin = document.getElementById('refreshSpin');
+  btn.disabled = true;
+  spin.className = 'spin';
+  document.getElementById('errorBox').innerHTML = '';
+
+  try{
+    const today = jakartaToday();
+    const targets = [1,2,3].map(n => addDays(today, n));
+    let anyFetchAttempted = false;
+    let allFetchesFailed = true;
+
+    const todayDateLabel = today.getUTCDate() + ' ' + MONTHS_ID[today.getUTCMonth()] + ' ' + today.getUTCFullYear();
+    const todayPromise = (async () => {
+      const monthCfgToday = getMonthConfig(today.getUTCFullYear(), today.getUTCMonth());
+      const todayGid = monthCfgToday ? monthCfgToday.gidMap[today.getUTCDate()] : undefined;
+      if (!todayGid){
+        return { dateLabel: todayDateLabel, error: 'Tab untuk hari ini belum ada di daftar gid — tolong kirim gid tab tanggal ' + today.getUTCDate() + '.' };
+      }
+      try{
+        const rows = await fetchTabRows(monthCfgToday.sheetId, todayGid);
+        const block = extractSingleBlock(rows);
+        const stats = extractSummaryStats(rows);
+        if (!block && !stats){
+          return { dateLabel: todayDateLabel, error: 'Format tab hari ini tidak bisa terbaca otomatis.' };
+        }
+        return { dateLabel: todayDateLabel, slots: block ? summarizeBlock(block) : null, stats };
+      } catch(e){
+        return { dateLabel: todayDateLabel, error: 'Gagal mengambil data tab hari ini.' };
+      }
+    })();
+
+    const dayInfos = await Promise.all(targets.map(async (date) => {
+      const dayName = DAYNAMES_ID[date.getUTCDay()];
+      const dateLabel = date.getUTCDate() + ' ' + MONTHS_ID[date.getUTCMonth()] + ' ' + date.getUTCFullYear();
+      const dayOfMonth = date.getUTCDate();
+      const monthCfg = getMonthConfig(date.getUTCFullYear(), date.getUTCMonth());
+      const gid = monthCfg ? monthCfg.gidMap[dayOfMonth] : undefined;
+
+      if (!gid){
+        return { dayName, dateLabel, dayOfMonth, slots: null };
+      }
+      anyFetchAttempted = true;
+      try{
+        const rows = await fetchTabRows(monthCfg.sheetId, gid);
+        allFetchesFailed = false;
+        const block = extractSingleBlock(rows);
+        if (!block){
+          return { dayName, dateLabel, dayOfMonth, error: 'Format tab untuk tanggal ini tidak bisa terbaca otomatis — tolong cek manual di spreadsheet.' };
+        }
+        return { dayName, dateLabel, dayOfMonth, sheetId: monthCfg.sheetId, slots: summarizeBlock(block), jobTally: tallyJobTypes(block) };
+      } catch(e){
+        return { dayName, dateLabel, dayOfMonth, error: 'Gagal mengambil data tab tanggal ini.' };
+      }
+    }));
+
+    const todayInfo = await todayPromise;
+    if (!todayInfo.error) allFetchesFailed = false;
+
+    if (anyFetchAttempted && allFetchesFailed){
+      throw new Error('Semua percobaan pengambilan data gagal (kemungkinan masalah jaringan/akses).');
+    }
+
+    renderToday(todayInfo);
+    renderDays(dayInfos);
+    document.getElementById('lastUpdated').textContent =
+      'Update terakhir: ' + new Date().toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  } catch(e){
+    renderError((e && e.message) ? e.message : String(e));
+  } finally {
+    btn.disabled = false;
+    spin.className = '';
+  }
+}
+
+// ---------- Control Booking: staff types a VIN/No. Rangka or Plat Nopol and the app
+// checks whether that vehicle already has a booking anywhere — not just in the "today +
+// 3 days" window the rest of the page shows, but across every date tab this app knows
+// about (every month in MONTHS_CONFIG, every day in that month's gidMap). That means a
+// search fetches every configured tab in parallel and only then reports a match/no-match,
+// so it takes a few seconds — a one-off lookup, not something that runs on every
+// auto-refresh like the rest of the page. ----------
+function normalizePlateOrVin(s){
+  return String(s || '').trim().toUpperCase().replace(/\s+/g, '');
+}
+
+async function searchVehicleAcrossAllTabs(query){
+  const target = normalizePlateOrVin(query);
+  if (!target) return [];
+
+  const tasks = [];
+  for (const mk of Object.keys(MONTHS_CONFIG)){
+    const cfg = MONTHS_CONFIG[mk];
+    const [y, m] = mk.split('-').map(Number);
+    for (const dayStr of Object.keys(cfg.gidMap)){
+      tasks.push({ year: y, month0: m - 1, dayOfMonth: parseInt(dayStr, 10), sheetId: cfg.sheetId, gid: cfg.gidMap[dayStr] });
+    }
+  }
+
+  const matches = [];
+  let tabsFailed = 0;
+  await Promise.all(tasks.map(async (t) => {
+    let rows, block;
+    try{
+      rows = await fetchTabRows(t.sheetId, t.gid);
+      block = extractSingleBlock(rows);
+    } catch(e){
+      tabsFailed++; // one tab failing to load/parse shouldn't stop the rest of the search
+      return;
+    }
+    if (!block) return;
+    for (const s of block){
+      if (!s.booked) continue;
+      const plateN = normalizePlateOrVin(s.plate);
+      const vinN = normalizePlateOrVin(s.vin);
+      const plateHit = plateN && plateN.includes(target);
+      const vinHit = vinN && vinN.includes(target);
+      if (!plateHit && !vinHit) continue;
+      const exact = plateN === target || vinN === target;
+      const mins = normTimeToMinutes(s.time);
+      matches.push({
+        exact,
+        sortKey: t.year * 10000 + (t.month0 + 1) * 100 + t.dayOfMonth,
+        mins: mins === null ? 0 : mins,
+        dayName: DAYNAMES_ID[new Date(Date.UTC(t.year, t.month0, t.dayOfMonth)).getUTCDay()],
+        dateLabel: t.dayOfMonth + ' ' + MONTHS_ID[t.month0] + ' ' + t.year,
+        timeLabel: mins === null ? '' : fmtMinutes(mins),
+        custName: s.cust,
+        plate: s.plate,
+        model: s.model,
+        jobType: s.jobType,
+        jobDetail: s.jobDetail,
+        vin: s.vin
+      });
+    }
+  }));
+
+  // If literally every tab failed to load, "tidak ketemu" would be a false claim — we
+  // never actually managed to check anything. Surface that as a real error instead of
+  // silently reporting "Belum Booking" (which could wrongly send staff to remind a
+  // customer who, for all we know, already booked).
+  if (tasks.length > 0 && tabsFailed === tasks.length){
+    throw new Error('Semua tab gagal dimuat — kemungkinan masalah jaringan/akses.');
+  }
+
+  // Exact plate/VIN matches first, then chronological.
+  matches.sort((a, b) => (b.exact - a.exact) || (a.sortKey - b.sortKey) || (a.mins - b.mins));
+  return matches;
+}
+
+function renderControlResult(state){
+  const box = document.getElementById('controlResult');
+  if (state === 'idle'){
+    box.innerHTML = '';
+    return;
+  }
+  if (state === 'loading'){
+    box.innerHTML = '<div class="control-loading">Mencari ke semua tanggal yang terdaftar…</div>';
+    return;
+  }
+  if (state === 'error'){
+    box.innerHTML = '<div class="control-card cc-notfound"><div class="cc-title">Gagal mencari</div>' +
+      '<div class="cc-sub">Terjadi kesalahan saat mengambil data. Coba lagi.</div></div>';
+    return;
+  }
+  const results = state;
+  if (results.length === 0){
+    box.innerHTML = '<div class="control-card cc-notfound">' +
+      '<div class="cc-title">Belum Booking</div>' +
+      '<div class="cc-sub">Kendaraan ini belum booking, silakan di-reminder.</div>' +
+    '</div>';
+    return;
+  }
+  box.innerHTML = results.map(r => {
+    const job = [r.jobType, r.jobDetail].filter(Boolean).join(' — ') || 'Job type belum diisi';
+    return '<div class="control-card cc-found">' +
+      '<div class="cc-row"><span class="cc-label">Nama Customer</span><span class="cc-value">' + escapeHtml(r.custName || '-') + '</span></div>' +
+      '<div class="cc-row"><span class="cc-label">Plat Nopol</span><span class="cc-value">' + escapeHtml(r.plate || '-') + '</span></div>' +
+      '<div class="cc-row"><span class="cc-label">Tanggal Booking</span><span class="cc-value">' + escapeHtml(r.dayName) + ', ' + escapeHtml(r.dateLabel) + (r.timeLabel ? ' — ' + escapeHtml(r.timeLabel) : '') + '</span></div>' +
+      '<div class="cc-row"><span class="cc-label">Pekerjaan</span><span class="cc-value">' + escapeHtml(job) + '</span></div>' +
+    '</div>';
+  }).join('');
+}
+
+let controlSearchToken = 0;
+async function runControlSearch(){
+  const input = document.getElementById('controlQuery');
+  const query = input.value.trim();
+  const btn = document.getElementById('controlSearchBtn');
+  const myToken = ++controlSearchToken; // a newer search in flight makes an older one's result stale
+  if (!query){
+    renderControlResult('idle');
+    return;
+  }
+  btn.disabled = true;
+  renderControlResult('loading');
+  try{
+    const results = await searchVehicleAcrossAllTabs(query);
+    if (myToken !== controlSearchToken) return;
+    renderControlResult(results);
+  } catch(e){
+    if (myToken !== controlSearchToken) return;
+    renderControlResult('error');
+  } finally {
+    if (myToken === controlSearchToken) btn.disabled = false;
+  }
+}
+
+loadData();
+setInterval(loadData, 15 * 1000);
+</script>
+</body>
+</html>
