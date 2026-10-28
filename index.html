@@ -973,11 +973,11 @@ function renderToday(info){
   const meterHtml =
     '<div>' +
       '<div class="meter-row">' +
-        '<div class="meter-label"><span class="big">' + totalBooked + ' / ' + totalCap + '</span>' +
+        '<div class="meter-label"><span class="big">' + totalBooked + '</span>' +
           '<span class="sub">' + pctFilled + '% terisi</span></div>' +
         '<div class="meter-track"><div class="meter-fill" style="width:' + pctFilled + '%;"></div></div>' +
       '</div>' +
-      '<div class="meter-caption">Sisa <strong>' + remaining + ' slot</strong> lagi yang masih bisa diisi hari ini.</div>' +
+      '<div class="meter-caption">Mohon untuk booking max H-1 sebelum kedatangan.</div>' +
     '</div>';
 
   let stackHtml = '<div class="empty-note">Data rate kedatangan belum tersedia.</div>';
